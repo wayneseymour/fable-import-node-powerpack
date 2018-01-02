@@ -32,4 +32,4 @@ jobs:
                 - cd fable
                 - dotnet pack
                 - cd bin/Debug/netstandard2.0
-                - dotnet push *.nupkg -k $NUGET_KEY
+                - dotnet nuget push *.nupkg -k $NUGET_KEY

@@ -31,5 +31,5 @@ jobs:
             script:
                 - cd fable
                 - dotnet pack
-                - cd bin/Debug/netstandard2.0
+                - cd bin/Debug
                 - dotnet nuget push *.nupkg -k $NUGET_KEY

@@ -32,4 +32,4 @@ jobs:
                 - cd fable
                 - dotnet pack
                 - cd bin/Debug
-                - dotnet nuget push *.nupkg -k $NUGET_KEY
+                - dotnet nuget push *.nupkg -s https://api.nuget.org/v3/index.json -k $NUGET_KEY

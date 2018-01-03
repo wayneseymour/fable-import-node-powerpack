@@ -4,6 +4,7 @@
 
 namespace Fable.Import.Node.PowerPack
 
+[<AutoOpen>]
 module Net =
     open Fable.Import.Node
     open Fable.Core
@@ -20,11 +21,7 @@ module Net =
     let onceConnect (fn:unit -> unit) (c:Net.Socket)  = c.once("connect", fn) :?> Net.Socket
 
     let onConnect (fn:unit -> unit) (c:Net.Socket)  = c.on("connect", fn) :?> Net.Socket
-
-    let onData (fn:string -> unit) (c:Stream.Stream) = c.on("data", fn) :?> Net.Socket
-
-    let onError (fn:string -> unit) (c:Stream.Stream) = c.on("error", fn) :?> Net.Socket
-
+    
     let connect (x:NetPath) = Net.connect x
 
     let createServer opts serverHandler = Net.createServer(opts, serverHandler)

@@ -4,6 +4,7 @@
 
 namespace Fable.Import.Node.PowerPack
 
+[<AutoOpen>]
 module ChildProcess =
     open Fable.Import.Node
     open Fable.Core.JsInterop
@@ -12,9 +13,6 @@ module ChildProcess =
     
     type Stdout = Stdout of string
     type Stderr = Stderr of string
-
-    type ExecOk = Stdout * Stderr
-    type ExecErr = ChildProcess.ExecError * Stdout * Stderr
 
     let private toStr = function
       | U2.Case2(x:Buffer.Buffer) -> x.toString "utf8"

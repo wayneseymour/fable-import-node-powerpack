@@ -54,18 +54,6 @@ testList "NetHelpers" [
       mockOn <??> ("connect", (expect.any Function))
       mockOnStringToObj <?> "connect"
 
-    "should expose onData", fun (nodeHelpers, _, _, mockOn, mockOnStringToObj, _) ->
-      let c = createObj ["on" ==> mockOn.Mock]
-      nodeHelpers?onData (mockOnStringToObj.Mock, c) |> ignore
-      mockOn <??> ("data", (expect.any Function))
-      mockOnStringToObj <?> "data"
-
-    "should expose onError", fun (nodeHelpers, _, _, mockOn, mockOnStringToObj, _) ->
-      let c = createObj ["on" ==> mockOn.Mock]
-      nodeHelpers?onError (mockOnStringToObj.Mock, c) |> ignore
-      mockOn <??> ("error", (expect.any Function))
-      mockOnStringToObj <?> "error"
-
     "should expose connect with NetPath", fun (nodeHelpers, mockConnect, _, _, _, _) ->
       nodeHelpers?connect (createObj ["path" ==> "/var/run/device-scanner.sock" ]) |> ignore
       mockConnect.LastCalledWith (createObj ["path" ==> "/var/run/device-scanner.sock"])

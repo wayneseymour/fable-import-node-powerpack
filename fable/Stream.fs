@@ -12,6 +12,14 @@ module Stream =
         s.on("error", fn) |> ignore
         s
 
+    let data<'a, 'b when 'a :> Stream.Stream> (fn:'b -> unit) (s:'a) = 
+        s.on("data", fn) |> ignore
+        s
+
+    let ``end``<'a when 'a :> Stream.Stream> (fn:unit -> unit) (s:'a) =
+        s.on("end", fn) |> ignore
+        s
+
     /// function wrapper for Stream.Transform
     let transform<'read, 'a, 'b when 'read :> Stream.Readable<'a>> optsFn fn fn2 (r:'read) =
         let transformOpts:Stream.TransformOptions<'a, 'b> = 

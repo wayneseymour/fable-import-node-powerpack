@@ -8,6 +8,8 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Stream.Test.fs" />
+    <Compile Include="Net.Test.fs" />
+    <Compile Include="ChildProcess.Test.fs" />
   </ItemGroup>
   <Import Project="..\.paket\Paket.Restore.targets" />
 </Project>

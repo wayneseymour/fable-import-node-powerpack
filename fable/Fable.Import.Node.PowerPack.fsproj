@@ -7,6 +7,8 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Stream.fs" />
+    <Compile Include="Net.fs" />
+    <Compile Include="ChildProcess.fs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="*.fsproj; *.fs" PackagePath="fable/" />

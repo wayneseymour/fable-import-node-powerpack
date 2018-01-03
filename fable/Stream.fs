@@ -4,21 +4,24 @@
 
 namespace Fable.Import.Node.PowerPack
 
+[<AutoOpen>]
 module Stream =
     open Fable.Import.Node
     open Fable.Core.JsInterop
 
-    let error<'a, 'b when 'a :> Stream.Stream> (fn: 'b -> unit) (s:'a) = 
-        s.on("error", fn) |> ignore
-        s
+    let onError<'a, 'b when 'a :> Stream.Stream> (fn: 'b -> unit) (s:'a) = 
+        s.on("error", fn) :?> 'a
 
-    let data<'a, 'b when 'a :> Stream.Stream> (fn:'b -> unit) (s:'a) = 
-        s.on("data", fn) |> ignore
-        s
+    let onData<'a, 'b when 'a :> Stream.Readable<'b>> (fn:'b -> unit) (s:'a) = 
+        s.on("data", fn) :?> 'a
 
-    let ``end``<'a when 'a :> Stream.Stream> (fn:unit -> unit) (s:'a) =
-        s.on("end", fn) |> ignore
-        s
+    let onEnd<'a, 'b when 'a :> Stream.Writable<'b>> (fn:unit -> unit) (s:'a) =
+        s.on("end", fn) :?> 'a
+
+    let ``end``<'a, 'b when 'a :> Stream.Writable<'b>> (x:'b option) (s:'a) =
+      match x with
+      | Some(x) -> s.``end``(x)
+      | None -> s.``end``()
 
     /// function wrapper for Stream.Transform
     let transform<'read, 'a, 'b when 'read :> Stream.Readable<'a>> optsFn fn fn2 (r:'read) =

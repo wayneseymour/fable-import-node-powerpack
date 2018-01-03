@@ -68,35 +68,31 @@ testDone "should handle errors from the stream" <| fun d ->
     jsonStream.``end``()
 
 testDone "should have a 'data' function" <| fun (d) ->
-    let dataMock = Matcher<obj, unit>()
+    expect.assertions 1
     let p = Stream.PassThrough.Create()
 
-    let jsonStream =
-        p
-            |> getJsonStream()
-
-    data (dataMock.Mock) jsonStream |> ignore
-    ``end`` (fun () -> 
-        dataMock <?> createObj [ "key" ==> "val"]
-        d.``done``()) jsonStream |> ignore
+    p
+        |> getJsonStream()
+        |> onData (toEqual (Json (createObj [ "key" ==> "val"])))
+        |> onEnd (fun () -> d.``done``())
+        |> ignore
 
     p.write(Buffer.Buffer.from """{ "key": "val" }""") |> ignore
-    jsonStream.``end``()
+    ``end`` None p
 
 testDone "should have an 'error' function" <| fun (d) ->
     let p = Stream.PassThrough.Create()
 
-    let jsonStream =
-        p
-            |> getJsonStream()
-
-    error (fun e ->
-        e == JS.Error.Create "Unexpected end of JSON input"
-        d.``done``()) jsonStream |> ignore
+    p
+        |> getJsonStream()
+        |> onError (fun e ->
+            e == JS.Error.Create "Unexpected end of JSON input"
+            d.``done``())
+        |> ignore
 
     p.write(Buffer.Buffer.from """{ "food": "bard", """) |> ignore
     p.write(Buffer.Buffer.from "\n") |> ignore
-    jsonStream.``end``()
+    ``end`` (Some(Buffer.Buffer.from "test")) (p)
 
 testList "LineDelimitedJsonStream" [
     let withSetup fn () =

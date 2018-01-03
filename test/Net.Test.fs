@@ -30,18 +30,6 @@ testList "NetHelpers" [
     f(nodeHelpers, mockConnect, mockCreateServer, mockOnAndOnce, mockOnStringToObj, mockOnObjToObj)
 
   yield! testFixture withSetup [
-    "should expose end with an argument", fun(nodeHelpers, _, _, _, _, _) ->
-      let mockSocket = Matcher<string, unit>()
-      let c = createObj ["end" ==> mockSocket.Mock]
-      nodeHelpers?``end`` (c, "some val") |> ignore
-      mockSocket <?> "some val"
-
-    "should expose end without an argument", fun (nodeHelpers, _, _, _, _ , _) ->
-      let mockSocket = Matcher<unit, unit>()
-      let c = createObj ["end" ==> mockSocket.Mock]
-      nodeHelpers?``end`` (c) |> ignore
-      mockSocket.LastCalledWith ()
-
     "should expose onceConnect", fun (nodeHelpers, _, _, mockOnce, mockOnStringToObj, _) ->
       let c = createObj ["once" ==> mockOnce.Mock]
       nodeHelpers?onceConnect (mockOnStringToObj.Mock, c) |> ignore

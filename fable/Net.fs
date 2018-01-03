@@ -14,10 +14,6 @@ module Net =
       path: string
     }
 
-    let ``end`` (c:Net.Socket) = function
-      | Some(x) -> c.``end``(x)
-      | None -> c.``end``()
-
     let onceConnect (fn:unit -> unit) (c:Net.Socket)  = c.once("connect", fn) :?> Net.Socket
 
     let onConnect (fn:unit -> unit) (c:Net.Socket)  = c.on("connect", fn) :?> Net.Socket

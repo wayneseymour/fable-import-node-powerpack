@@ -17,8 +17,8 @@ module ChildProcess =
     type ExecErr = ChildProcess.ExecError * Stdout * Stderr
 
     let private toStr = function
-      | U2.Case1(x) -> x
       | U2.Case2(x:Buffer.Buffer) -> x.toString "utf8"
+      | U2.Case1(x) -> x
 
     let exec (cmd:string) =
       Promise.create(fun res _ ->

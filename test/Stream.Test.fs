@@ -2,7 +2,7 @@
 // Use of this source code is governed by a MIT-style
 // license that can be found in the LICENSE file.
 
-module Fable.Import.PowerPack.Test
+module Fable.Import.Node.PowerPack.StreamTest
 
 open Fable.Import
 open Fable.Core
@@ -66,6 +66,33 @@ testDone "should handle errors from the stream" <| fun d ->
     p.write(Buffer.Buffer.from """{ "food": "bard", """) |> ignore
     p.write(Buffer.Buffer.from "\n") |> ignore
     jsonStream.``end``()
+
+testDone "should have a 'data' function" <| fun (d) ->
+    expect.assertions 1
+    let p = Stream.PassThrough.Create()
+
+    p
+        |> getJsonStream()
+        |> onData (toEqual (Json (createObj [ "key" ==> "val"])))
+        |> onEnd (fun () -> d.``done``())
+        |> ignore
+
+    p.write(Buffer.Buffer.from """{ "key": "val" }""") |> ignore
+    ``end`` None p
+
+testDone "should have an 'error' function" <| fun (d) ->
+    let p = Stream.PassThrough.Create()
+
+    p
+        |> getJsonStream()
+        |> onError (fun e ->
+            e == JS.Error.Create "Unexpected end of JSON input"
+            d.``done``())
+        |> ignore
+
+    p.write(Buffer.Buffer.from """{ "food": "bard", """) |> ignore
+    p.write(Buffer.Buffer.from "\n") |> ignore
+    ``end`` (Some(Buffer.Buffer.from "test")) (p)
 
 testList "LineDelimitedJsonStream" [
     let withSetup fn () =

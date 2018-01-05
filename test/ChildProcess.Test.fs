@@ -4,56 +4,45 @@
 
 module Fable.Import.Node.PowerPack.ChildProcessTest
 
-open Fable.Import.Jest
-open Matchers
-open Fable.Import
-open Fable.Import.JS
-open Fable.Import.Node
 open Fable.Core.JsInterop
+open Fable.Import.Jest
 open Fable.PowerPack
-open Fable.Import.Node.PowerPack.ChildProcess
-open Fable.Import.Node.Base.NodeJS
-open Fable.Import.Node.ChildProcess
+open Matchers
+open Fable.Import.Node
 
 testList "ChildProcessHelpers" [
   let withSetup f () =
-    let execCallbackHandler _ _ fn = fn (None, Buffer.Buffer.from("buffer1"), "string2")
-    let mockChildProcessExec = Matcher3<string, obj, ((Error option * Buffer.Buffer * string) -> unit), unit> (execCallbackHandler)
-    let mockChildProcess = createObj ["exec" ==> mockChildProcessExec.Mock]
-    jest.mock("child_process", fun () -> mockChildProcess)
-    
-    let nodeHelpers = Globals.require.Invoke "../fable/ChildProcess.fs"
-
-    f(nodeHelpers, mockChildProcessExec)
+    let opts = createEmpty<ChildProcess.ExecOptions>
+    opts.encoding <- Some("buffer")
+    let p = exec "echo 'Print a message'" (Some(opts))
+    f(p)
 
   yield! testFixtureAsync withSetup [
-    "should call ChildProcess.exec", fun (nodeHelpers, mockExec) ->
+    "should call ChildProcess.exec", fun (p) ->
       promise {
-        let! result = nodeHelpers?exec("command") :?> JS.Promise<Result<(Stdout * Stderr),(ChildProcess.ExecError * Stdout * Stderr)>>
-        mockExec <???> ("command", (expect.any Object), (expect.any Function))
-        result == Ok (Stdout("buffer1"), Stderr("string2"))
+        let! result = p
+        result == Ok (Stdout("Print a message\n"), Stderr(""))
       }
   ]
 ]
 
 testList "ChildProcessHelpers with error" [
     let withSetup f () =
-      let e = Error.Create "An error occurred" :?> ChildProcess.ExecError
-      let execCallbackHandler _ _ fn = fn (Some(e), Buffer.Buffer.from("buffer1"), "string2")
-      let mockChildProcessExec = Matcher3<string, obj, ((ExecError option * Buffer.Buffer * string) -> unit), unit> (execCallbackHandler)
-      let mockChildProcess = createObj ["exec" ==> mockChildProcessExec.Mock]
-      jest.mock("child_process", fun () -> mockChildProcess)
-
-      let nodeHelpers = Globals.require.Invoke "../fable/ChildProcess.fs"
-
-      f(nodeHelpers, e)
+      let p = exec "echo 'Print a message' 1>&2 && exit 1"
+      f(p)
 
     yield! testFixtureAsync withSetup [
-      "should handle errors", fun (nodeHelpers, e) ->
+      "should handle errors", fun (p) ->
        
         promise {
-          let! result = nodeHelpers?exec("command") :?> JS.Promise<Result<(Stdout * Stderr),(ChildProcess.ExecError * Stdout * Stderr)>>
-          result == Result.Error (e, Stdout("buffer1"), Stderr("string2"))
+          let! result = p None
+          match result with
+            | Error (e:ChildProcess.ExecError, stdout', stderr') -> 
+                e.message == "Command failed: echo 'Print a message' 1>&2 && exit 1\nPrint a message\n"
+                e.code == 1
+                stdout' == Stdout("")
+                stderr' == Stderr("Print a message\n")
+            | _ -> raise (System.Exception("Command didn't fail as it should have."))
         }
     ]
 ]

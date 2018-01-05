@@ -4,25 +4,24 @@
 
 module Fable.Import.Node.PowerPack.ChildProcessTest
 
+open Fable.Core.JsInterop
 open Fable.Import
 open Fable.Import.Jest
 open Fable.PowerPack
 open Matchers
 open Fable.Import.Node
-open Fable.Import.Node.ChildProcess
-open Fable.Import.Node.Base.NodeJS
-open Fable.Import
-open System
 
 testList "ChildProcessHelpers" [
   let withSetup f () =
-    let p = exec "echo 'Print a message'"
+    let opts = createEmpty<ChildProcess.ExecOptions>
+    opts.encoding <- Some("buffer")
+    let p = exec "echo 'Print a message'" (Some(opts))
     f(p)
 
   yield! testFixtureAsync withSetup [
     "should call ChildProcess.exec", fun (p) ->
       promise {
-        let! result = p :?> JS.Promise<Result<(Stdout * Stderr),(ChildProcess.ExecError * Stdout * Stderr)>>
+        let! result = p
         result == Ok (Stdout("Print a message\n"), Stderr(""))
       }
   ]
@@ -37,11 +36,11 @@ testList "ChildProcessHelpers with error" [
       "should handle errors", fun (p) ->
        
         promise {
-          let! result = p :?> JS.Promise<Result<(Stdout * Stderr),(ChildProcess.ExecError * Stdout * Stderr)>>
-          let err = Fable.Import.JS.Error.Create "Command failed: echo 'Print a message' 1>&2 && exit 1\nPrint a message\n" :?> ChildProcess.ExecError
+          let! result = p None
+          let err = JS.Error.Create "Command failed: echo 'Print a message' 1>&2 && exit 1\nPrint a message\n" :?> ChildProcess.ExecError
           err.code <- 1
           match result with
-            | Error (e, stdout', stderr') -> 
+            | Error (e:ChildProcess.ExecError, stdout', stderr') -> 
                 e.message == err.message
                 e.code == err.code
                 stdout' == Stdout("")

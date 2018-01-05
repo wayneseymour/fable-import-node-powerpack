@@ -4,7 +4,6 @@
 
 namespace Fable.Import.Node.PowerPack
 
-open Fable.Import
 [<AutoOpen>]
 module ChildProcess =
     open Fable.Import.Node
@@ -19,12 +18,15 @@ module ChildProcess =
       | U2.Case2(x:Buffer.Buffer) -> x.toString "utf8"
       | U2.Case1(x) -> x
 
-    let exec (cmd:string) =
+    let exec (cmd:string) (opts:ChildProcess.ExecOptions option) =
       Promise.create(fun res _ ->
 
-        let opts = createEmpty<ChildProcess.ExecOptions>
+        let execOpts = 
+            match opts with
+            | Some(x) -> x
+            | None -> createEmpty<ChildProcess.ExecOptions>
 
-        ChildProcess.exec(cmd, opts, (fun e  stdout' stderr' ->
+        ChildProcess.exec(cmd, execOpts, (fun e  stdout' stderr' ->
           let stdout = stdout' |> toStr |> Stdout
           let stderr = stderr' |> toStr |> Stderr
 

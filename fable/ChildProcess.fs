@@ -4,6 +4,7 @@
 
 namespace Fable.Import.Node.PowerPack
 
+open Fable.Import
 [<AutoOpen>]
 module ChildProcess =
     open Fable.Import.Node
@@ -23,7 +24,7 @@ module ChildProcess =
 
         let opts = createEmpty<ChildProcess.ExecOptions>
 
-        ChildProcess.exec(cmd, opts, (fun (e, stdout', stderr') ->
+        ChildProcess.exec(cmd, opts, (fun e  stdout' stderr' ->
           let stdout = stdout' |> toStr |> Stdout
           let stderr = stderr' |> toStr |> Stderr
 

@@ -5,7 +5,6 @@
 module Fable.Import.Node.PowerPack.ChildProcessTest
 
 open Fable.Core.JsInterop
-open Fable.Import
 open Fable.Import.Jest
 open Fable.PowerPack
 open Matchers
@@ -37,12 +36,10 @@ testList "ChildProcessHelpers with error" [
        
         promise {
           let! result = p None
-          let err = JS.Error.Create "Command failed: echo 'Print a message' 1>&2 && exit 1\nPrint a message\n" :?> ChildProcess.ExecError
-          err.code <- 1
           match result with
             | Error (e:ChildProcess.ExecError, stdout', stderr') -> 
-                e.message == err.message
-                e.code == err.code
+                e.message == "Command failed: echo 'Print a message' 1>&2 && exit 1\nPrint a message\n"
+                e.code == 1
                 stdout' == Stdout("")
                 stderr' == Stderr("Print a message\n")
             | _ -> raise (System.Exception("Command didn't fail as it should have."))

@@ -14,6 +14,7 @@ open Fable.Import.Jest
 open Matchers
 open Util
 open Fable.Import.Node.PowerPack.Stream
+open Fable.Import.Node.Base.NodeJS
 
 type TestRec = {
   foo:string;
@@ -33,7 +34,22 @@ testDone "iterates passthrough string" <| fun (d) ->
     p
         |> Writable.``end`` (Some "foo")
 
-testDone "iterates passthrough buffer" <| fun (d) ->
+testDone "iterates passthrough buffer with opts" <| fun (d) ->
+    expect.assertions 1
+
+    
+    let opts = createEmpty<Stream.PassThroughOptions<Buffer.Buffer>>
+    let p = PassThrough.create (Some(opts))
+
+    p
+      |> Stream.iter (toEqual (buffer.Buffer.from "foo"))
+      |> Stream.Writable.onFinish (fun () -> d.``done``())
+      |> ignore
+
+    p
+        |> Writable.``end`` (Some (buffer.Buffer.from "foo"))
+
+testDone "iterates passthrough buffer without opts" <| fun (d) ->
     expect.assertions 1
 
     let p = PassThrough.create None
@@ -58,6 +74,24 @@ testDone "iterates passthrough obj" <| fun (d) ->
 
     p
         |> Writable.``end`` (Some {foo = "foo"; bar = "bar"})
+
+testDone "error on iterate" <| fun (d) ->
+    expect.assertions 1
+
+    let p = PassThrough.createObj None
+    let err = System.Exception "Big bad error"
+
+    p
+        |> iter(fun _ -> raise err)
+        |> Readable.onError (fun (e) ->
+            e == err
+            d.``done``()
+        )
+        |> ignore
+    
+    p
+        |> Writable.``end`` (Some ("data"))
+            
 
 testDone "transforms passthrough string" <| fun (d) ->
     let p = PassThrough.createString None
@@ -136,6 +170,24 @@ testDone "map" <| fun (d) ->
         )
         |> ignore
 
+testDone "error on map" <| fun (d) ->
+    expect.assertions 1
+
+    let p = PassThrough.createString None
+    let err = JS.Error.Create "bad mapper"
+
+    p
+        |> Writable.write "foo"
+        |> map (fun _ -> Error(err))
+        |> Readable.onError (fun e ->
+            e == err
+            d.``done``()    
+        )
+        |> ignore
+
+    Writable.``end`` None p
+
+
 testDone "reduce" <| fun (d) ->
     expect.assertions 1
 
@@ -155,6 +207,22 @@ testDone "reduce" <| fun (d) ->
 
     Writable.``end`` None p
 
+testDone "error on reduce" <| fun (d) ->
+    expect.assertions 1
+    let p = PassThrough.createString None
+    let err = JS.Error.Create "error in reduction"
+
+    p
+        |> Writable.write "foo"
+        |> Writable.write "bar"
+        |> Stream.reduce "" (fun acc x ->
+            Error(err)
+        )
+        |> Readable.onError (fun e ->
+            e == err
+            d.``done``()
+        )
+        |> ignore
 
 testDone "should handle errors from the stream" <| fun d ->
     expect.assertions 1
@@ -301,6 +369,18 @@ testList "LineDelimitedJsonStream" [
                 ]
 
                 res == exp
-            }
+            };
+
+        "should handle errors", fun p jsonStream ->
+            p.``end``(buffer.Buffer.from """{"Test:"bla"}""")                
+            
+            promise {
+                try
+                    let! _ = streamToPromise jsonStream                  
+                    ()
+                with
+                    | e -> 
+                        e == System.Exception "Unexpected token b in JSON at position 8"
+            };
     ]
 ]

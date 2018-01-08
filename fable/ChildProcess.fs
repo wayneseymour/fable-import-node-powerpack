@@ -10,7 +10,7 @@ module ChildProcess =
     open Fable.Core.JsInterop
     open Fable.Core
     open Fable.PowerPack
-    
+
     type Stdout = Stdout of string
     type Stderr = Stderr of string
 
@@ -21,12 +21,12 @@ module ChildProcess =
     let exec (cmd:string) (opts:ChildProcess.ExecOptions option) =
       Promise.create(fun res _ ->
 
-        let execOpts = 
+        let execOpts =
             match opts with
             | Some(x) -> x
             | None -> createEmpty<ChildProcess.ExecOptions>
 
-        ChildProcess.exec(cmd, execOpts, (fun e  stdout' stderr' ->
+        childProcess.exec(cmd, execOpts, (fun e  stdout' stderr' ->
           let stdout = stdout' |> toStr |> Stdout
           let stderr = stderr' |> toStr |> Stderr
 

@@ -1,0 +1,17 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`should handle multiple errors in a single chunk 1`] = `
+Object {
+  "Test": "bla",
+}
+`;
+
+exports[`should handle multiple errors in a single chunk 2`] = `[SyntaxError: Unexpected end of JSON input]`;
+
+exports[`should handle multiple errors in a single chunk 3`] = `[SyntaxError: Unexpected token } in JSON at position 5]`;
+
+exports[`should handle multiple errors in a single chunk 4`] = `
+Object {
+  "Test2": "bla",
+}
+`;

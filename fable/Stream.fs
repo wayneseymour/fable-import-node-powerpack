@@ -8,7 +8,7 @@ module Fable.Import.Node.PowerPack.Stream
 open Fable.Import.Node
 open Fable.Core.JsInterop
 open Fable.Core
-
+open Fable.Import
 
 let private getReadableState<'a, 'b when 'a :> Stream.Readable<'b>> (r:'a) =
     let readableState:obj = !!r?_readableState
@@ -106,12 +106,16 @@ let transform<'read, 'a, 'b when 'read :> Stream.Readable<'a>> optsFn fn fn2 (r:
     transformOpts.transform <- Some(fun chunk enc cb ->
         let self:Stream.Transform<'a, 'b> = jsThis
 
-        let push x =
-            self.push(Some x)
-                |> ignore
+        let push = function
+            | Ok x -> 
+                self.push (Some x)
+                    |> ignore
+            | Error (x:JS.Error) -> 
+                self.emit("error", x)
+                    |> ignore
 
-        let next x =
-            cb x None
+        let next () =
+            cb None None
 
         fn chunk enc push next
     )
@@ -121,12 +125,16 @@ let transform<'read, 'a, 'b when 'read :> Stream.Readable<'a>> optsFn fn fn2 (r:
             transformOpts.flush <- Some(fun cb ->
                 let self:Stream.Transform<'a, 'b> = jsThis
 
-                let push x =
-                    self.push(Some x)
-                        |> ignore
+                let push = function
+                    | Ok x -> 
+                        self.push (Some x)
+                            |> ignore
+                    | Error (x:JS.Error) -> 
+                        self.emit("error", x)
+                            |> ignore
 
-                let fin x =
-                    cb x
+                let fin () =
+                    cb None
 
                 f push fin
             )
@@ -156,37 +164,81 @@ let transform<'read, 'a, 'b when 'read :> Stream.Readable<'a>> optsFn fn fn2 (r:
 [<PassGenerics>]
 let map<'read, 'a, 'b when 'read :> Stream.Readable<'a>> (fn:'a -> Result<'b, _>) (r:'read) =
     let transformer chunk _ push next =
-        match fn(chunk) with
-            | Ok y ->
-                push y
-                next None
-            | Error y ->
-                next (Some y)
+        chunk
+            |> fn
+            |> push
+
+        next()
 
     transform None transformer None r
+
+[<PassGenerics>]
+let tap<'read, 'a, 'b when 'read :> Stream.Readable<'a>> (fn:'a -> 'b) (r:'read) =
+    map (fun x -> 
+        fn(x)
+            |> ignore
+        Ok x
+    )  r
 
 [<PassGenerics>]
 let reduce<'read, 'a, 'b when 'read :> Stream.Readable<'a>> (init:'b) (fn:'b -> 'a -> Result<'b, _>) (r:'read) =
     let mutable init':'b = init
 
-    let transformer chunk _ _ next =
+    let transformer chunk _ push next =
         match fn init' chunk with
             | Ok y ->
                 init' <- y
-                next None
             | Error y ->
-                next (Some y)
+                push (Error y)
+
+        next()
 
     let flusher push fin =
-        push init'
-        fin None
+        push (Ok init')
+        fin()
 
     transform None transformer (Some flusher)  r
+
+type StreamBuilder() =
+    member  __.Yield(v:'a) =
+        let s = PassThrough.createObj(None)
+
+        Globals.``process``.nextTick(unbox(fun _ ->
+            s.``end``(v)
+        ))
+
+        s
+
+    member __.Combine<'a, 'b when 'a :> Stream.PassThrough<'b>>((a:'a), (b:'a)):Stream.PassThrough<'b> =
+        let ps = PassThrough.createObj(None)
+
+        let writer x =
+            ps.write x
+                |> ignore
+
+        Readable.onData writer a
+            |> ignore
+
+        Readable.onData writer b
+            |> ignore
+
+        Globals.``process``.nextTick(unbox(fun _ ->
+            ps.``end``()
+        ))
+
+        ps
+
+    member __.Delay(f) =
+        f()
+
+/// Computation expression.
+/// yielded streams are in object mode
+/// so use caution if performance is critical.
+let streams = StreamBuilder()
 
 [<RequireQualifiedAccess>]
 module LineDelimitedJson =
     open Fable.Import.Node.Stream
-    open Fable.Import
     open System.Text.RegularExpressions
 
     [<Erase>]
@@ -202,35 +254,43 @@ module LineDelimitedJson =
           | ex ->
             Error (!!ex)
 
-    let private matcher x =
-      match Regex.Match(x, "\\n") with
-        | m when m.Success -> Some(m.Index)
-        | _ -> None
+    type TransformQueue(parser) =
+        let regex = Regex("\\n")
+        let mutable incoming = ""
+        let mutable queue = []
 
-    let private adjustBuff (buff:string) (index:int) =
-      let out = buff.Substring(0, index)
-      let buff = buff.Substring(index + 1)
-      (out, buff)
+        member __.Push x =
+            incoming <- incoming + x
 
-    let rec private getNextMatch (buff:string) (callback:JS.Error option -> Json option -> unit) (turn:int) =
-      let opt = matcher(buff)
+            while regex.IsMatch(incoming) do
+                let m = regex.Match(incoming)
 
-      match opt with
-        | None ->
-          if turn = 0 then
-            callback None None
-          buff
-        | Some(index) ->
-          let (out, b) = adjustBuff buff index
+                let record = incoming.Substring(0, m.Index)
+                incoming <- incoming.Substring(m.Index + 1)
 
-          match parser out with
-            | Ok(x) -> callback None (Some x)
-            | Error(e) -> callback (e |> Some) None
+                queue <- queue @ [parser record]
 
-          getNextMatch b callback (turn + 1)
+        member __.ForceFlush () =
+            let queue' = queue
+            let incoming' = incoming
 
-    let create () r =
-      let mutable buff = ""
+            queue <- []
+            incoming <- ""
+
+            if incoming'.Length > 0 then
+                queue' @ [parser incoming']
+            else
+                []
+
+        member __.Flush () =
+            let queue' = queue
+
+            queue <- []
+
+            queue'
+
+    let create () r:Stream.Transform<Buffer.Buffer, Json> =
+      let transformQueue = TransformQueue(parser)
 
       let optsFn () =
         let opts = createEmpty<TransformOptions<Buffer.Buffer, Json>>
@@ -238,29 +298,21 @@ module LineDelimitedJson =
         opts
 
       let dataFn (chunk:Buffer.Buffer) _ push next =
-        buff <- getNextMatch
-            (buff + chunk.toString("utf-8"))
+        transformQueue.Push(chunk.toString "utf-8")
 
+        transformQueue.Flush()
+            |> List.iter push
 
-            (fun err x ->
-              if Option.isSome err then
-                next(err)
-              else
-                Option.iter push x
-                next None
-            )
-            0
+        next()
 
       let flushFn push fin =
-        if buff.Length = 0
-          then
-            fin None
-          else
-            match parser buff with
-                | Ok(x) ->
-                  push x
-                  fin None
-                | Error(e) ->
-                  e |> Some |> fin
+        transformQueue.ForceFlush()
+            |> List.iter push
 
-      transform (Some optsFn) dataFn (Some flushFn) r
+        fin()
+
+      let s = transform (Some optsFn) dataFn (Some flushFn) r
+
+      Readable.onError(fun _ ->
+        r.pipe(s) |> ignore
+      ) s

@@ -14,7 +14,7 @@ open Fable.Import.Jest
 open Matchers
 open Util
 open Fable.Import.Node.PowerPack.Stream
-open Fable.Import.Node.Base.NodeJS
+open Fable.Import.Node.PowerPack
 
 type TestRec = {
   foo:string;
@@ -37,7 +37,6 @@ testDone "iterates passthrough string" <| fun (d) ->
 testDone "iterates passthrough buffer with opts" <| fun (d) ->
     expect.assertions 1
 
-    
     let opts = createEmpty<Stream.PassThroughOptions<Buffer.Buffer>>
     let p = PassThrough.create (Some(opts))
 
@@ -91,15 +90,14 @@ testDone "error on iterate" <| fun (d) ->
     
     p
         |> Writable.``end`` (Some ("data"))
-            
 
 testDone "transforms passthrough string" <| fun (d) ->
     let p = PassThrough.createString None
 
     p
       |> Stream.transform None (fun x _ p n ->
-        p (x + "bar")
-        n None
+        p (Ok (x + "bar"))
+        n()
       ) None
       |> Stream.iter (toEqual "foobar")
       |> Stream.Writable.onFinish (fun () -> d.``done``())
@@ -107,7 +105,6 @@ testDone "transforms passthrough string" <| fun (d) ->
 
     p
         |> Writable.``end`` (Some "foo")
-
 
 testDone "map string" <| fun (d) ->
     expect.assertions 1
@@ -181,21 +178,19 @@ testDone "error on map" <| fun (d) ->
         |> map (fun _ -> Error(err))
         |> Readable.onError (fun e ->
             e == err
-            d.``done``()    
+            d.``done``()
         )
         |> ignore
 
     Writable.``end`` None p
 
-
 testDone "reduce" <| fun (d) ->
     expect.assertions 1
 
-    let p = PassThrough.createString None
-
-    p
-        |> Writable.write "foo"
-        |> Writable.write "bar"
+    streams {
+        yield "foo"
+        yield "bar"
+    }
         |> Stream.reduce "" (fun acc x ->
             Ok (acc + x)
         )
@@ -205,17 +200,16 @@ testDone "reduce" <| fun (d) ->
         )
         |> ignore
 
-    Writable.``end`` None p
-
 testDone "error on reduce" <| fun (d) ->
     expect.assertions 1
-    let p = PassThrough.createString None
+
     let err = JS.Error.Create "error in reduction"
 
-    p
-        |> Writable.write "foo"
-        |> Writable.write "bar"
-        |> Stream.reduce "" (fun acc x ->
+    streams {
+        yield "foo"
+        yield "bar"
+    }
+        |> Stream.reduce "" (fun _ _ ->
             Error(err)
         )
         |> Readable.onError (fun e ->
@@ -223,6 +217,20 @@ testDone "error on reduce" <| fun (d) ->
             d.``done``()
         )
         |> ignore
+
+testAsync "should work with streams computation expression" <| fun () ->
+    streams {
+        yield "foo"
+
+        yield "bar"
+
+        yield "baz"
+    }
+        |> Stream.reduce "" (fun acc x ->
+            Ok (acc + x)
+        )
+        |> Stream.tap (toEqual "foobarbaz")
+        |> streamToPromise
 
 testDone "should handle errors from the stream" <| fun d ->
     expect.assertions 1
@@ -251,30 +259,35 @@ testDone "should handle errors from the stream" <| fun d ->
 
 testDone "should have a 'data' function" <| fun (d) ->
     expect.assertions 1
-    let p = stream.PassThrough.Create()
 
-    p
+    streams {
+        yield buffer.Buffer.from """{ "key": "val" }"""
+    }
         |> LineDelimitedJson.create()
         |> Readable.onData (toEqual (LineDelimitedJson.Json (createObj [ "key" ==> "val"])))
         |> Readable.onEnd (fun () -> d.``done``())
         |> ignore
 
-    p.write(buffer.Buffer.from """{ "key": "val" }""") |> ignore
-    Writable.``end`` None p
-
 testDone "should have an 'error' function" <| fun (d) ->
-    let p = stream.PassThrough.Create()
-
-    p
+    streams {
+        yield buffer.Buffer.from """{ "food": "bard", """
+        yield buffer.Buffer.from "\n"
+    }
         |> LineDelimitedJson.create()
         |> Readable.onError (fun e ->
             e == JS.Error.Create "Unexpected end of JSON input"
             d.``done``())
         |> ignore
 
-    p.write(buffer.Buffer.from """{ "food": "bard", """) |> ignore
-    p.write(buffer.Buffer.from "\n") |> ignore
-    Writable.``end`` (Some(buffer.Buffer.from "test")) (p)
+testDone "should handle multiple errors in a single chunk" <| fun (d) ->
+    streams {
+        yield (buffer.Buffer.from "{\"Test\":\"bla\"}\n{\"Test\":\n\"bla\"}\n{\"Test2\":\"bla\"}")
+    }
+        |> LineDelimitedJson.create()
+        |> Readable.onError toMatchSnapshot
+        |> iter toMatchSnapshot
+        |> Writable.onFinish d.``done``
+        |> ignore
 
 testList "LineDelimitedJsonStream" [
     let withSetup fn () =
@@ -353,9 +366,7 @@ testList "LineDelimitedJsonStream" [
                     bar = "baz"
                   } ]
             };
-
         "should handle multiple records correctly", fun p jsonStream ->
-
             p.write(buffer.Buffer.from """{"TestRec": { "foo": "bar", """) |> ignore
             p.write(buffer.Buffer.from "\"bar\": \"baz\" }}\n") |> ignore
             p.``end``(buffer.Buffer.from """{"TestRec2": {"baz": "bap"}}""")
@@ -370,13 +381,25 @@ testList "LineDelimitedJsonStream" [
 
                 res == exp
             };
+        "should handle two full records in a single chunk", fun p jsonStream ->
+            p.``end``(buffer.Buffer.from "{\"TestRec\": { \"foo\": \"bar\", \"bar\": \"baz\" }}\n{\"TestRec2\": {\"baz\": \"bap\"}}\n") |> ignore
 
+            promise {
+                let! res = streamToPromise jsonStream
+
+                let exp = [
+                    LineDelimitedJson.Json (createObj ["TestRec" ==> createObj [ "foo" ==> "bar"; "bar" ==> "baz" ]]);
+                    LineDelimitedJson.Json (createObj ["TestRec2" ==> createObj ["baz" ==> "bap"]]);
+                ]
+
+                res == exp
+            };
         "should handle errors", fun p jsonStream ->
-            p.``end``(buffer.Buffer.from """{"Test:"bla"}""")                
+            p.``end``(buffer.Buffer.from """{"Test:"bla"}""")
             
             promise {
                 try
-                    let! _ = streamToPromise jsonStream                  
+                    let! _ = streamToPromise jsonStream
                     ()
                 with
                     | e -> 
